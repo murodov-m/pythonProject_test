@@ -195,6 +195,6 @@ def echo_message(message):
 # bot.enable_save_next_step_handlers(delay=2)
 # bot.load_next_step_handlers()
 
-print("Bot started")
+bot.send_message(739327515, "Bot started")
 
 bot.infinity_polling()
