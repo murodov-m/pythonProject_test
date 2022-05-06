@@ -4,7 +4,6 @@
 # It echoes any incoming text messages.
 """
 6. Задание:
-
 Создать команду /me Имя, в котором в качестве ответа выводится информация принадлежности
 данного имени к какой то нации (попробуйте назвать, что Ваш учитель нацист:), я больше заданий дам)
 https://api.nationalize.io/?name=gayrat
@@ -12,7 +11,7 @@ https://api.nationalize.io/?name=gayrat
 
 import telebot
 import requests
-import pprint
+import pprint # noqa
 from decouple import config
 import pymongo
 
@@ -23,7 +22,10 @@ bot = telebot.TeleBot(API_TOKEN)
 # DB CONFIGS
 client = pymongo.MongoClient(config('MONGO'))
 db = client.test
-users = db.users
+collusers = db.users
+collbans = db.bans
+collfunc = db.func
+
 
 
 def natist_g(name):
@@ -34,9 +36,6 @@ def natist_g(name):
         country_pr = (i['country_id'], i['probability'])
         x = x + str(country_pr)
     return x
-
-
-print(natist_g('Shirin'))
 
 
 def bitcoin_rate():
@@ -97,47 +96,71 @@ def user():
 @bot.message_handler(commands=['user'])
 def send_random_user(message):
     x = user()
+    func_user = collfunc.find_one({"id": message.chat.id})
+    if not func_user:
+        collfunc.insert_one({"id": message.chat.id, "func": "user", "count": 1})
+    else:
+        # counter = func_user['count']  # 1
+        collfunc.update_one({"id": message.chat.id}, {"$inc": {"count": 1}})
     bot.send_message(message.chat.id, x)
 
 
 @bot.message_handler(commands=['start'])
 def send_random_user(message):
-    user_id = users.find_one({"id": message.chat.id})
-    if user_id:
-        pass
-    else:
-        print(user_id)
-        users.insert_one({'id': message.chat.id,
-                          'name': message.from_user.first_name})
+    user_id = collusers.find_one({"id": message.chat.id})
+    if not user_id:
+        collusers.insert_one({'id': message.chat.id,
+                              'name': message.from_user.first_name})
     bot.send_message(message.chat.id, "Hello")
 
 
-@bot.message_handler(commands=['age'])
-def send_welcome(message: telebot.types.Message):
-    # keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
-    # keyboard.add('/btc')
-    # keyboard.add('/music')
-    p = bot.send_message(message.chat.id, "Вам нужно ввести минимальный возраст")
-    bot.register_next_step_handler(p, set_min_reg)
+@bot.message_handler(commands=['del'])
+def delete_user_data_from_db(msg):
+    bot.send_message(msg.chat.id, "Successfully deleted!")
+    collusers.delete_one({"id": msg.chat.id})
 
+
+@bot.message_handler(commands=['update'])  # /update New_name
+def update_user_data_from_db(message):
+    updated_name = message.text.split()
+    if len(updated_name) > 1:
+        x = updated_name[1]
+        collusers.update_one({"id": message.chat.id}, {"$set": {"name": x}})  # first dict is finding collection, second setting collection
+        bot.send_message(message.chat.id, "Successfully updated!")
+    else:
+        bot.send_message(message.chat.id, "Please send me supported command For example:\n/me *Name*", parse_mode="MarkdownV2")
+
+@bot.message_handler(commands=['help'])
+def help_text(message):
+    bot.send_message(message.chat.id, "/me {имя} - Команда для того чтобы определить к какой нации относится данное имя")
 
 @bot.message_handler(commands=['me'])
 def send_random_user(message):
     # natist_name = message.from_user.first_name
-    natist_name = message.text.split()[1]
-    x = natist_g(natist_name)
-    bot.send_message(message.chat.id, x)
+    natist_name = message.text.split()
+    if len(natist_name) > 1:
+        natist_name = natist_name[1]
+        x = natist_g(natist_name)
+        bot.send_message(message.chat.id, x)
+    else:
+        bot.send_message(message.chat.id, "Please send me supported command For example:\n/me *Name*", parse_mode="MarkdownV2")
+
+
+@bot.message_handler(func=lambda message: message.text == "Регистрация")
+def send_welcome(message: telebot.types.Message):
+    p = bot.send_message(message.chat.id, "Введите Ваше имя")
+    bot.register_next_step_handler(p, set_min_reg)
 
 
 def set_min_reg(message: telebot.types.Message):
-    if not message.text.isdigit():
-        retype = bot.send_message(message.chat.id,
-                                  "Минимальный возраст должен состоять только из цифр")
-        bot.register_next_step_handler(retype, set_min_reg)
-    else:
-        ## pass save method for this DB
-        success = bot.send_message(message.chat.id, "Теперь введите максимальный возраст")
-        bot.register_next_step_handler(success, set_max_age)
+    name = message.text
+    x = collusers.find_one({"id": message.chat.id})
+    collusers.update_one({"id": message.chat.id}, {"$set": {"id": message.chat.id, "name": name}})
+
+    bot.send_message(message.chat.id, "SUCCESSFULLY CHANGED")
+    # retype = bot.send_message(message.chat.id,
+    #                           "Минимальный возраст должен состоять только из цифр")
+    # bot.register_next_step_handler(retype, set_min_reg)
 
 
 def set_max_age(message):
@@ -195,6 +218,6 @@ def echo_message(message):
 # bot.enable_save_next_step_handlers(delay=2)
 # bot.load_next_step_handlers()
 
-bot.send_message(739327515, "Bot started")
+print("Bot started")
 
 bot.infinity_polling()
