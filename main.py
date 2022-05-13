@@ -191,6 +191,7 @@ async def send_btc_rate(message):
 async def send_songs(message):
     x = message.text.split()
     music_get = await music(x)
+    print('hello Mamur. This is Shirin')
     await bot.send_message(message.chat.id, music_get)
 
 
